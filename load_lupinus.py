@@ -18,7 +18,6 @@ import time
 import requests
 
 DATE_FORMAT = "strict_date_optional_time||yyyy-MM-dd||yyyy-MM||yyyy"
-# Nested fields and event dates are built in transform() from the JSON columns.
 FIELDS = {
     "guid": {"type": "keyword"},
     "guid_prefix": {"type": "keyword"},
