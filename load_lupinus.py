@@ -17,17 +17,126 @@ import time
 
 import requests
 
+DATE_FORMAT = "strict_date_optional_time||yyyy-MM-dd||yyyy-MM||yyyy"
+# Nested fields and event dates are built in transform() from the JSON columns.
 FIELDS = {
-    "guid_prefix": "keyword", "type": "keyword", "cataloged_item_type": "keyword",
-    "cat_num": "text", "institution_acronym": "keyword", "collection_cde": "keyword",
-    "collectors": "keyword", "continent_ocean": "keyword", "country": "keyword",
-    "state_prov": "keyword", "county": "keyword", "dec_lat": "float",
-    "dec_long": "float", "datum": "text", "coordinateuncertaintyinmeters": "float",
-    "scientific_name": "text", "identifiedby": "text", "kingdom": "keyword",
-    "phylum": "keyword", "family": "keyword", "genus": "keyword", "species": "keyword",
-    "subspecies": "keyword", "relatedinformation": "text", "year": "integer",
-    "month": "integer", "day": "integer", "taxon_rank": "keyword", "parts": "keyword",
-    "has_tissue": "keyword", "guid": "keyword", "collection_object_id": "keyword",
+    "guid": {"type": "keyword"},
+    "guid_prefix": {"type": "keyword"},
+    "type": {"type": "keyword"},
+    "collection_object_id": {"type": "keyword"},
+    "cataloged_item_type": {"type": "keyword"},
+    "cat_num": {"type": "text"},
+    "institution_acronym": {"type": "keyword"},
+    "collection_cde": {"type": "keyword"},
+    "relatedinformation": {"type": "text"},
+    "parts": {"type": "keyword"},
+    "has_tissue": {"type": "keyword"},
+    "collectors": {"type": "keyword"},
+    "identifiedby": {"type": "text"},
+    "kingdom": {"type": "keyword"},
+    "phylum": {"type": "keyword"},
+    "family": {"type": "keyword"},
+    "genus": {"type": "keyword"},
+    "species": {"type": "keyword"},
+    "subspecies": {"type": "keyword"},
+    "scientific_name": {"type": "text"},
+    "taxon_rank": {"type": "keyword"},
+    "continent_ocean": {"type": "keyword"},
+    "country": {"type": "keyword"},
+    "state_prov": {"type": "keyword"},
+    "county": {"type": "keyword"},
+    "dec_lat": {"type": "float"},
+    "dec_long": {"type": "float"},
+    "datum": {"type": "text"},
+    "coordinateuncertaintyinmeters": {"type": "float"},
+    "year": {"type": "integer"},
+    "month": {"type": "integer"},
+    "day": {"type": "integer"},
+
+    "events": {
+        "type": "nested",
+        "properties": {
+            "specimen_event_id": {"type": "long", "ignore_malformed": True},
+            "specimen_event_type": {"type": "keyword"},
+            "synthesized": {"type": "boolean"},
+            "began_date": {"type": "date", "format": DATE_FORMAT, "ignore_malformed": True},
+            "ended_date": {"type": "date", "format": DATE_FORMAT, "ignore_malformed": True},
+            "verbatim_date": {"type": "text", "index": False},
+            "higher_geog": {"type": "text"},
+            "habitat": {"type": "text"},
+            "verificationstatus": {"type": "keyword"},
+            "spec_locality": {"type": "text"},
+            "locality_name": {"type": "text"},
+            "locality_search_terms": {"type": "keyword", "normalizer": "lc"},
+            "locality_id": {"type": "long", "ignore_malformed": True},
+            "coordinates": {"type": "geo_point", "ignore_malformed": True},
+            "coordinate_error_m": {"type": "float", "ignore_malformed": True},
+            "collecting_method": {"type": "keyword"},
+            "collecting_source": {"type": "keyword"},
+        },
+    },
+    "event_date_min": {"type": "date", "format": DATE_FORMAT, "ignore_malformed": True},
+    "event_date_max": {"type": "date", "format": DATE_FORMAT, "ignore_malformed": True},
+
+    "detected": {"type": "keyword"},
+    "not_detected": {"type": "keyword"},
+    "examined_for": {"type": "keyword"},
+    "not_examined_for": {"type": "keyword"},
+
+    "attributedetail": {
+        "type": "nested",
+        "properties": {
+            "attribute_type": {"type": "keyword", "normalizer": "lc"},
+            "attribute_value": {"type": "keyword", "normalizer": "lc"},
+            "attribute_method": {"type": "text", "fields": {"keyword": {"type": "keyword", "normalizer": "lc"}}},
+            "attribute_remark": {"type": "text"},
+            "attribute_determiner": {"type": "keyword", "normalizer": "lc"},
+            "attribute_date": {"type": "date", "format": DATE_FORMAT, "ignore_malformed": True},
+            "attribute_units": {"type": "keyword", "normalizer": "lc"},
+        },
+    },
+
+    "partdetail": {
+        "type": "nested",
+        "properties": {
+            "part_name": {"type": "keyword", "normalizer": "lc"},
+            "disposition": {"type": "keyword", "normalizer": "lc"},
+            "condition": {"type": "keyword", "normalizer": "lc"},
+            "part_count": {"type": "integer", "ignore_malformed": True},
+            "part_barcode": {"type": "keyword"},
+            "container_path": {"type": "text"},
+            "part_remark": {"type": "text"},
+            "partID": {"type": "keyword", "index": False},
+            "parentPartID": {"type": "keyword", "index": False},
+            "part_attributes": {"type": "flattened"},
+        },
+    },
+
+    "agents": {
+        "type": "nested",
+        "properties": {
+            "agent_id": {"type": "keyword"},
+            "agent_name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+            "agent_role": {"type": "keyword"},
+            "agent_order": {"type": "integer", "ignore_malformed": True},
+        },
+    },
+
+    "relations": {
+        "type": "nested",
+        "properties": {
+            "relationship": {"type": "keyword"},
+            "related_guid": {"type": "keyword"},
+            "related_identifier": {"type": "keyword"},
+            "related_identifier_type": {"type": "keyword"},
+            "related_identification": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+            "related_geography": {"type": "text"},
+            "related_phylum": {"type": "keyword", "normalizer": "lc"},
+            "related_family": {"type": "keyword", "normalizer": "lc"},
+            "related_genus": {"type": "keyword", "normalizer": "lc"},
+            "related_species": {"type": "keyword", "normalizer": "lc"},
+        },
+    },
 }
 RETRY_STATUSES = {429, 502, 503, 504}
 csv.field_size_limit(100_000_000)
@@ -47,9 +156,28 @@ def save_json(path, value):
     temp.replace(path)
 
 
+def add_ignore_above(props):
+    """
+    Adds ignore_above to (potentially nested) keywords
+    """
+    return {name: {**({"ignore_above": 8191} if spec["type"] == "keyword" else {}), **spec,
+                   **({"properties": add_ignore_above(spec["properties"])} if "properties" in spec else {}),
+                   **({"fields": add_ignore_above(spec["fields"])} if "fields" in spec else {})}
+            for name, spec in props.items()}
+
+
 def fingerprint(path):
     stat = path.stat()
     return {"path": str(path.resolve()), "size": stat.st_size, "mtime_ns": stat.st_mtime_ns}
+
+
+def raw_json_to_nested(value):
+    """
+    Expands a raw JSON value into a list of dicts so that it can be parsed as
+    a nested ES field
+    """
+    items = json.loads(value) if value and value.strip() else []
+    return [item for item in (items if isinstance(items, list) else [items]) if isinstance(item, dict)]
 
 
 def transform(row, types):
@@ -58,7 +186,8 @@ def transform(row, types):
     corrections = {}
     doc["has_tissue"] = row.get("has_tissue") or row.get("has_tissues", "")
     doc["continent_ocean"] = row.get("continent_ocean") or row.get("continent") or row.get("ocean", "")
-    for name, kind in FIELDS.items():
+    for name, spec in FIELDS.items():
+        kind = spec["type"]
         if name == "type" or name not in doc:
             continue
         value = (doc[name] or "").strip()
@@ -77,6 +206,29 @@ def transform(row, types):
             doc[name] = [part.strip() for part in value.split(",") if part.strip()]
         else:
             doc[name] = value
+    for name in ("detected", "not_detected", "examined_for", "not_examined_for"):
+        if name in doc:
+            doc[name] = [part.strip() for part in (doc[name] or "").split(";") if part.strip()]
+    parsed, json_originals = {}, {}
+    for column in ("partdetail", "attributedetail", "json_locality", "collector_agents", "related_record_cache"):
+        try:
+            parsed[column] = raw_json_to_nested(row.get(column))
+        except ValueError:
+            parsed[column] = []
+            json_originals[column] = row[column]
+    doc["partdetail"] = parsed["partdetail"]
+    doc["attributedetail"] = parsed["attributedetail"]
+    doc["events"] = parsed["json_locality"]
+    began = [event["began_date"] for event in doc["events"] if event.get("began_date")]
+    ended = [event["ended_date"] for event in doc["events"] if event.get("ended_date")]
+    if began:
+        doc["event_date_min"] = min(began)
+    if ended:
+        doc["event_date_max"] = max(ended)
+    doc["agents"] = [{("agent_id" if key == "agent_identifier" else key): value for key, value in agent.items()}
+                     for agent in parsed["collector_agents"]]
+    if json_originals:
+        doc["_csv_json_originals"] = json_originals
     if corrections:
         doc["_csv_numeric_originals"] = corrections
     if types.get(doc.get("guid_prefix")):
@@ -242,9 +394,10 @@ def main():
     if existing is None:
         if state["rows"]:
             raise RuntimeError("Checkpoint target index is missing")
-        props = {name: {"type": kind, **({"ignore_above": 8191} if kind == "keyword" else {})} for name, kind in FIELDS.items()}
+        props = add_ignore_above(FIELDS)
         api.request("PUT", "/" + args.index, body={
-            "settings": {"number_of_shards": 1, "number_of_replicas": 0, "refresh_interval": "-1"},
+            "settings": {"analysis": {"normalizer": {"lc": {"type": "custom", "filter": ["lowercase"]}}},
+                         "number_of_shards": 1, "number_of_replicas": 0, "refresh_interval": "-1"},
             "mappings": {"dynamic": False, "_meta": {"arctos_csv_import": identity}, "properties": props}})
         log("index_created", index=args.index)
     elif existing[args.index].get("mappings", {}).get("_meta", {}).get("arctos_csv_import") != identity:
